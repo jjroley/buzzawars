@@ -1,3 +1,9 @@
+/** 
+ If dragged onto occupied square, the avatar is placed on the closest square on vertical axis that is not occupied.
+**/
+
+
+
 //inspired a lot by plants vs zombies 2.
 //{
 /*
@@ -1570,6 +1576,10 @@ Enemy.prototype.ai = function() {
     }
 };
 
+
+/** Define a variable that will hold the type of avatar being dragged onto the grid **/
+var avatarDragType = null;
+
 var slots = [];
 //slots
 var Slot = function(x, y) {
@@ -1582,6 +1592,39 @@ var Slot = function(x, y) {
         return mouseInside1(this);
     };
     //draw them
+    this.place = function() {
+        if(this.mouseInside()) {
+            fill(15, 138, 17);
+            /** 
+             * I set it up so that if the mouse is not being pressed, the avatar being dragged returns to null
+             * If the avatar drag type has not yet been set to null, but the mouse is not being pressed, that means that the mouse button has just been released. So, place the avatar
+            **/
+            if(avatarDragType && !mouseIsPressed && mouseButton === LEFT) {
+                var yPos = this.y;
+                if(this.occupied) {
+                    var closest = (mouseY - (yPos + this.h / 2)) < 0 ? -1 : 1;
+                    yPos += this.h * closest;
+                    yPos = floor(yPos);
+                    var xPos = this.x;
+                    var nextSlot = slots.findIndex(function(s) {
+                        return s.y === yPos && s.x === xPos;
+                    });
+                    if(nextSlot === -1) {
+                        return;
+                    }
+                    if(slots[nextSlot].occupied) {
+                        return;
+                    }
+                }
+                
+                if(gold >= costs[avatarDragType]) {
+                    towers.push(new Tower(this.x + this.w/2, yPos + this.h / 2, avatarDragType));
+                    gold -= costs[avatarDragType];
+                    avatarDragType = null;
+                }
+            }
+        }
+    };
     this.draw = function() {
         //making it so that they have a checkered pattern
         noStroke();
@@ -1595,17 +1638,7 @@ var Slot = function(x, y) {
             fill(17, 153, 15);
         }
         //place the towers
-        if(this.mouseInside()) {
-            fill(15, 138, 17);
-            if(clicked && !this.occupied && selected !== "none" && mouseButton === LEFT) {
-                if(gold >= costs[selected]) {
-                    towers.push(new Tower(this.x + this.w/2, this.y + this.h/2, selected));
-                    gold -= costs[selected];
-                }
-                
-                
-            }
-        }
+        this.place();
         rect(this.x, this.y, this.w, this.h);
     };
 };
@@ -1615,6 +1648,10 @@ for(var i = 0; i < 7; i++) {
         slots.push(new Slot(43 + i * 75, 150 + t * 75));
     }
 }
+
+
+
+
 //select button (the buttons in game at the top)
 var SelectButton = function(x, y, w, h, type) {
     this.x = x;
@@ -1629,17 +1666,15 @@ var SelectButton = function(x, y, w, h, type) {
     this.cost = costs[this.type];
     
 };
-
 SelectButton.prototype.draw = function() {
-
-    fill(163, 95, 27);
-    if(this.mouseInside()) {
+    var available = gold >= this.cost;
+    fill(available ? color(163, 95, 27) : color(100));
+    if(this.mouseInside() && available) {
         fill(140, 79, 18);
         cursor(HAND);
-        if(clicked) {
-            if(gold >= this.cost) {
-                selected = this.type;
-            }
+        /** If the mouse is pressed, but there is no avatar selected, then set the avatar being dragged to the slot type **/
+        if(mouseIsPressed && !avatarDragType) {
+            avatarDragType = this.type;
         }
     }
     strokeWeight(3);
@@ -1676,6 +1711,10 @@ SelectButton.prototype.draw = function() {
             popMatrix();
     }
     popMatrix();
+    if(!available) {
+        fill(100, 200);
+        rect(this.x, this.y, this.w, this.h);
+    }
 };
 var selectBuzzaws = [
     new SelectButton(45, 0, 100, 100, "bSeed"),
@@ -1684,6 +1723,11 @@ var selectBuzzaws = [
     new SelectButton(345, 0, 100, 100, "bTree"),
     new SelectButton(445, 0, 100, 100, "bUltimate"),
 ];
+
+
+
+
+
 var time = 0;
 //yeah this is so i can make new enemies easily
 var newEnemy = function(sloty, ti, typey) {
@@ -1998,11 +2042,13 @@ var game = function() {
     //loop through particles
     runParticles();
     //show the selected avatar
-    if(selected !== "none") {
+    
+    /** basically I just replaced 'selected' with 'avatarDragType' **/
+    if(avatarDragType) {
         pushMatrix();
         translate(mouseX, mouseY);
-        scale(selected === "bSapling" ? 0.9 : 0.7);
-        image(imgs[selected], selected === "bUltimate" ? - 50 :  - 30, selected === "bUltimate" ?  - 60 :  - 30);
+        scale(avatarDragType === "bSapling" ? 0.9 : 0.7);
+        image(imgs[avatarDragType], avatarDragType === "bUltimate" ? - 50 :  - 30, avatarDragType === "bUltimate" ?  - 60 :  - 30);
         popMatrix();
     }
     if(mouseButton === RIGHT) {
@@ -2018,9 +2064,9 @@ var game = function() {
     if(keys[82]) {
         restarting = true;
     }
-    for(var i = 0; i < tooltips.length; i++) {
-        tooltips[i].draw();
-    }
+    // for(var i = 0; i < tooltips.length; i++) {
+    //     tooltips[i].draw();
+    // }
     //when the waves ends
     if(waveEnd) {
         gameImg = get();
@@ -2029,6 +2075,7 @@ var game = function() {
         suns.length = 0;
         bullets.length = 0;
         particles.length = 0;
+        gold = goldForWaves[wave];
         nxtWaveTimer = 0;
         nxtTrans = false;
         imgS = 1;
@@ -2328,7 +2375,6 @@ draw = function() {
     if(nxtTrans) {
         if(!Bool) {
             otherGameImg = get();
-            gold = goldForWaves[wave];
             page = 'game';
             Bool = true;
         }
@@ -2344,6 +2390,10 @@ draw = function() {
         if(transitions[i].trans === false) {
             transitions.splice(i, 1);
         }
+    }
+    /** if the mouse is not pressed, then stop dragging the avatar **/
+    if(!mouseIsPressed) {
+        avatarDragType = null;
     }
 };
 //stuff i dont actually need because no keyPresses
